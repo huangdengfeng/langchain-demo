@@ -10,7 +10,6 @@ public class Quickstart extends LangchainDemoApplicationTests {
     private static final String url = "http://9.134.74.46:11434";
     private static final String modeName = "deepseek-r1:1.5b";
 
-
     @Test
     public void helloworld() {
         ChatLanguageModel chatModel = OllamaChatModel.builder()
