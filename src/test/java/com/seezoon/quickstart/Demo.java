@@ -9,6 +9,12 @@ import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.data.segment.TextSegment;
+import dev.langchain4j.mcp.McpToolProvider;
+import dev.langchain4j.mcp.client.DefaultMcpClient;
+import dev.langchain4j.mcp.client.McpClient;
+import dev.langchain4j.mcp.client.transport.McpTransport;
+import dev.langchain4j.mcp.client.transport.http.HttpMcpTransport;
+import dev.langchain4j.mcp.client.transport.stdio.StdioMcpTransport;
 import dev.langchain4j.memory.ChatMemory;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.chat.ChatLanguageModel;
@@ -24,11 +30,12 @@ import dev.langchain4j.store.embedding.IngestionResult;
 import dev.langchain4j.store.embedding.inmemory.InMemoryEmbeddingStore;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import dev.langchain4j.store.memory.chat.InMemoryChatMemoryStore;
+import java.time.Duration;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
-import java.util.List;
-
 public class Demo extends LangchainDemoApplicationTests {
+
     private static final String url = "http://9.134.74.46:11434";
     private static final String modeName = "deepseek-r1:1.5b";
     private static final String embeddingModeName = "nomic-embed-text";
@@ -37,6 +44,7 @@ public class Demo extends LangchainDemoApplicationTests {
     public void responseWithAiService() {
         // ai service
         interface Assistant {
+
             String chat(String userMessage);
         }
 
@@ -66,12 +74,13 @@ public class Demo extends LangchainDemoApplicationTests {
     public void responseWithCustomJson() {
         // json schema
         record Person(String name, int age) {
+
         }
         // ai service
         interface PersonExtractor {
+
             Person extractPersonFrom(String text);
         }
-
 
         ChatLanguageModel chatModel = OllamaChatModel.builder()
                 .baseUrl(url)
@@ -140,23 +149,25 @@ public class Demo extends LangchainDemoApplicationTests {
     public void tool() {
         class Tools {
 
-            @Tool
+            @Tool("三个数之和")
             int add(int a, int b, int c) {
                 return a + b + c;
             }
 
-            @Tool
+            @Tool("两个数相乘")
             int multiply(int a, int b) {
                 return a * b;
             }
         }
         // ai service
         interface Assistant {
+
             String chat(String userMessage);
         }
 
         ChatLanguageModel chatModel = OllamaChatModel.builder()
                 .baseUrl(url)
+                .timeout(Duration.ofSeconds(10))
                 .modelName("qwen2.5:7b")
                 .logRequests(true)
                 .logResponses(true)
@@ -166,9 +177,48 @@ public class Demo extends LangchainDemoApplicationTests {
                 .tools(new Tools())
                 .build();
 
-        String answer = assistant.chat("What is 1+2 and 3*4?");
+        String answer = assistant.chat("What is 1+2+3 and 3*4?");
         System.out.println(answer);
     }
+
+    @Test
+    public void mcp() {
+        // ai service
+        interface Assistant {
+
+            String chat(String userMessage);
+        }
+
+        ChatLanguageModel chatModel = OllamaChatModel.builder()
+                .baseUrl(url)
+                .timeout(Duration.ofSeconds(10))
+                .modelName("qwen2.5:7b")
+                .logRequests(true)
+                .logResponses(true)
+                .build();
+
+        // 标准输入
+        McpTransport transport = new StdioMcpTransport.Builder()
+                .command(List.of("ls", "-a"))
+                .logEvents(true)
+                .build();
+
+        // http 方式加载
+        McpTransport httpTransport = new HttpMcpTransport.Builder().sseUrl("xxx").timeout(Duration.ofSeconds(10))
+                .logRequests(true).logResponses(true).build();
+
+        McpClient mcpClient = new DefaultMcpClient.Builder()
+                .transport(transport).build();
+
+        Assistant assistant = AiServices.builder(Assistant.class)
+                .chatLanguageModel(chatModel)
+                .toolProvider(McpToolProvider.builder().mcpClients(mcpClient).build())
+                .build();
+
+        String answer = assistant.chat("打开文件 /data");
+        System.out.println(answer);
+    }
+
 
     @Test
     public void rag() {
@@ -177,9 +227,9 @@ public class Demo extends LangchainDemoApplicationTests {
         List<Document> documents = ClassPathDocumentLoader.loadDocuments("docs");
         InMemoryEmbeddingStore<TextSegment> embeddingStore = new InMemoryEmbeddingStore<>();
         IngestionResult ingest = EmbeddingStoreIngestor.ingest(documents, embeddingStore);
-
         // ai service
         interface Assistant {
+
             String chat(String userMessage);
         }
 
@@ -190,7 +240,8 @@ public class Demo extends LangchainDemoApplicationTests {
                 .logResponses(true)
                 .build();
         Assistant assistant = AiServices.builder(Assistant.class)
-                .chatLanguageModel(chatModel).contentRetriever(EmbeddingStoreContentRetriever.from(embeddingStore)).build();
+                .chatLanguageModel(chatModel).contentRetriever(EmbeddingStoreContentRetriever.from(embeddingStore))
+                .build();
         String msg = assistant.chat("正不知那石头上面记着何人何事？看官请听。输出后面的段落");
         System.out.println(msg);
 
